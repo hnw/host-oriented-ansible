@@ -1,0 +1,26 @@
+---
+- name: Configure Raspberry Pi hardware settings
+  become: true
+  block:
+    - name: Disable Wi-Fi power save
+      ansible.builtin.copy:
+        dest: /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
+        content: |
+          [connection]
+          wifi.powersave = 2
+        mode: "0644"
+      notify: Restart NetworkManager
+
+    - name: Configure Systemd Watchdog
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system.conf
+        regexp: "^#?RuntimeWatchdogSec="
+        line: "RuntimeWatchdogSec=15s"
+      notify: Restart systemd-daemon
+
+    - name: Enable cgroup memory options in cmdline.txt
+      ansible.builtin.replace:
+        path: /boot/firmware/cmdline.txt
+        regexp: "^(?!.*cgroup_enable=memory)(.*)$"
+        replace: "\\1 cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1"
+      notify: Reboot host

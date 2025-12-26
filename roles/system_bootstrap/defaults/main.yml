@@ -1,0 +1,9 @@
+---
+# 必須パッケージ
+system_bootstrap_base_packages:
+  - locales
+  - vim
+  - git
+
+# ホストごとに自由に追加できるパッケージ（デフォルトは空）
+system_bootstrap_extra_packages: []

@@ -1,0 +1,55 @@
+---
+# 定常タスク
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Install system packages
+  ansible.builtin.apt:
+    # ベースのリストと、追加のリストを結合する
+    name: "{{ system_bootstrap_base_packages + system_bootstrap_extra_packages }}"
+    state: present
+  become: true
+
+- name: Ensure ja_JP.UTF-8 locale is generated
+  community.general.locale_gen:
+    name: ja_JP.UTF-8
+    state: present
+  become: true
+
+- name: Set default locale to ja_JP.UTF-8
+  ansible.builtin.command:
+    cmd: update-locale LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8
+  changed_when: false
+  become: true
+
+# メンテナンス用タスク (タグ指定時のみ実行)
+- name: Upgrade all packages (dist-upgrade)
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: true # 不要になった依存パッケージも削除
+  become: true
+  tags:
+    - upgrade
+
+- name: Check if reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: system_bootstrap_reboot_required
+  tags:
+    - upgrade
+
+- name: Reboot if required
+  ansible.builtin.reboot:
+    msg: "Rebooting due to system updates"
+    connect_timeout: 5
+    reboot_timeout: 600
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+    test_command: whoami
+  when: system_bootstrap_reboot_required.stat.exists
+  become: true
+  tags:
+    - upgrade

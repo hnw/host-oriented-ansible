@@ -1,0 +1,7 @@
+---
+collections:
+  - community.general
+  - prometheus.prometheus
+
+roles:
+  - src: geerlingguy.docker

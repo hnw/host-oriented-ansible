@@ -1,0 +1,3 @@
+# {{ ansible_managed }}
+# 全てのログを Alloy (UDP 1514) へ転送
+*.* @{{ rsyslog_forward_target | default('127.0.0.1') }}:1514;RSYSLOG_SyslogProtocol23Format

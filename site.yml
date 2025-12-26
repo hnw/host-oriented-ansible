@@ -1,0 +1,15 @@
+---
+- name: Apply dynamic roles to hosts
+  hosts: all
+  tasks:
+    - name: Include roles based on host variable
+      ansible.builtin.include_role:
+        name: "{{ role_item.name | default(role_item) }}"
+        apply:
+          become: "{{ role_item.become | default(false) | bool }}"
+          tags: "{{ role_item.tags | default([]) }}"
+      loop: "{{ apply_roles }}"
+      loop_control:
+        loop_var: role_item
+      tags:
+        - always

@@ -1,0 +1,87 @@
+// ============================================================================
+// 1. Metrics Settings (Prometheus)
+// ============================================================================
+
+prometheus.scrape "node_exporter" {
+  targets = [
+    {"__address__" = "raspberrypi4.lan:9100",  "instance" = "raspberrypi4.lan"},
+    {"__address__" = "raspberrypi3.lan:9100",  "instance" = "raspberrypi3.lan"},
+  ]
+  forward_to = [prometheus.relabel.node_exporter_filter.receiver]
+}
+
+prometheus.relabel "node_exporter_filter" {
+  forward_to = [prometheus.relabel.global_filter.receiver]
+  rule {
+    action        = "drop"
+    source_labels = ["__name__"]
+    regex         = "node_(systemd|sockstat|nfs|ip|arp|scrape_collector)_.+|node_cpu_scaling_governor"
+  }
+  // ファイルシステムのノイズ除去
+  rule {
+    action        = "drop"
+    source_labels = ["fstype"]
+    regex         = "tmpfs|overlay|nsfs|squashfs|autofs"
+  }
+  // ネットワークインターフェースのノイズ除去
+  rule {
+    action        = "drop"
+    source_labels = ["device"]
+    regex         = "(veth|br|docker|lo|cali).*"
+  }
+}
+
+prometheus.relabel "global_filter" {
+  forward_to = [prometheus.remote_write.default.receiver]
+  rule {
+    action        = "drop"
+    source_labels = ["__name__"]
+    regex         = "go_.*|process_.*"
+  }
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = sys.env("PROMETHEUS_URL")
+    basic_auth {
+      username = sys.env("PROMETHEUS_USERNAME")
+      password = sys.env("PROMETHEUS_PASSWORD")
+    }
+  }
+}
+
+// ============================================================================
+// 2. Logs Settings (Loki)
+// ============================================================================
+
+loki.relabel "journal_filter" {
+  forward_to = []
+  rule {
+    source_labels = ["__syslog_message_hostname"]
+    target_label  = "instance"
+  }
+  rule {
+    source_labels = ["__syslog_message_app_name"]
+    target_label  = "job"
+  }
+}
+
+loki.source.syslog "from_rsyslog" {
+  relabel_rules = loki.relabel.journal_filter.rules
+  forward_to = [loki.write.grafana_cloud_loki.receiver]
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "udp"
+    labels   = { job = "syslog" }
+  }
+}
+
+loki.write "grafana_cloud_loki" {
+  endpoint {
+    url = sys.env("LOKI_URL")
+    basic_auth {
+      username = sys.env("LOKI_USERNAME")
+      password = sys.env("LOKI_PASSWORD")
+    }
+  }
+}

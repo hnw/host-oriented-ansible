@@ -1,0 +1,23 @@
+---
+apply_roles:
+  - raspberrypi_setup
+  - system_bootstrap
+  - rsyslog
+  - prometheus.prometheus.node_exporter
+  - name: geerlingguy.docker
+    become: true
+  - docker_apps
+
+rsyslog_forward_target: "raspberrypi4.lan"
+
+docker_daemon_options:
+  log-driver: "journald"
+  log-opts:
+    tag: "{{ '{{' }}.Name{{ '}}' }}"
+
+docker_apps:
+  - dockge
+  - cloudflared
+
+# 秘密情報：説明用にここに書いていますが、実運用ではAnsible Vaultを使ってください
+cloudflared_token: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX

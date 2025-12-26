@@ -1,0 +1,109 @@
+---
+# 1. 変数の正規化
+- name: "Normalize app item structure for {{ app_item.name | default(app_item) }}"
+  ansible.builtin.set_fact:
+    docker_apps_item: >-
+      {{
+        app_item if app_item is mapping
+        else {'name': app_item}
+      }}
+
+# 2. パス変数の設定
+- name: "Set paths for {{ docker_apps_item.name }}"
+  ansible.builtin.set_fact:
+    docker_apps_path: "{{ docker_apps_item.path | default('/opt/stacks/' + docker_apps_item.name) }}"
+    docker_apps_host_dir: "{{ playbook_dir }}/host_vars/{{ inventory_hostname }}/{{ docker_apps_item.name }}"
+    docker_apps_role_dir: "{{ role_path }}/templates/{{ docker_apps_item.name }}"
+
+# 3. 設定ファイルを検索
+- name: "Find config files for {{ docker_apps_item.name }}"
+  ansible.builtin.find:
+    paths: "{{ search_paths | select('exists') }}"
+    file_type: file
+    hidden: true
+    recurse: false
+  vars:
+    search_paths:
+      - "{{ docker_apps_host_dir }}"
+      - "{{ docker_apps_role_dir }}"
+  delegate_to: localhost
+  register: docker_apps_found
+
+# 4. 設定ファイルリストの作成
+- name: "Discover default config files for {{ docker_apps_item.name }}"
+  ansible.builtin.set_fact:
+    docker_apps_files: >-
+      {{
+        docker_apps_found.files
+        | map(attribute='path')
+        | map('basename')
+        | reject('search', 'docker-compose.yml')
+        | reject('search', '~$')
+        | reject('search', '\.swp$')
+        | map('regex_replace', '\.j2$', '')
+        | list
+        | unique
+      }}
+
+# 5. ディレクトリ作成
+- name: "Ensure directory exists for {{ docker_apps_item.name }}"
+  ansible.builtin.file:
+    path: "{{ docker_apps_path }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+# 6. docker-compose.yml の配置
+- name: "Deploy docker-compose.yml for {{ docker_apps_item.name }}"
+  ansible.builtin.template:
+    src: "{{ lookup('first_found', search_paths) }}"
+    dest: "{{ docker_apps_path }}/docker-compose.yml"
+    mode: "0644"
+  vars:
+    search_paths:
+      - "{{ docker_apps_host_dir }}/docker-compose.yml.j2"
+      - "{{ docker_apps_host_dir }}/docker-compose.yml"
+      - "{{ docker_apps_role_dir }}/docker-compose.yml.j2"
+      - "{{ docker_apps_role_dir }}/docker-compose.yml"
+  diff: true
+  become: true
+
+# 7. その他のファイル (config.yamlなど) の配置
+- name: "Deploy config files for {{ docker_apps_item.name }}"
+  vars:
+    src_file: "{{ item.src | default(item) }}"
+    search_paths:
+      - "{{ docker_apps_host_dir }}/{{ src_file }}.j2"
+      - "{{ docker_apps_host_dir }}/{{ src_file }}"
+      - "{{ docker_apps_role_dir }}/{{ src_file }}.j2"
+      - "{{ docker_apps_role_dir }}/{{ src_file }}"
+    is_secret: "{{ item.secure | default(false) or (src_file is match('^\\.env')) }}"
+  ansible.builtin.template:
+    src: "{{ lookup('first_found', search_paths) }}"
+    dest: "{{ docker_apps_path }}/{{ item.dest | default(src_file | regex_replace('\\.j2$', '')) }}"
+    mode: "{{ item.mode | default('0600' if is_secret else '0644') }}"
+  diff: "{{ not is_secret }}"
+  loop: "{{ item.files | default(docker_apps_files) }}"
+  loop_control:
+    label: "{{ item.src | default(item) }}"
+  become: true
+  register: docker_apps_deploy_result
+
+# 8. コンテナ起動（作成・起動・Compose変更反映を担当）
+- name: "Ensure containers are running (up) for {{ docker_apps_item.name }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ docker_apps_path }}"
+    state: present
+    pull: missing
+  when: docker_apps_item.start_service | default(true)
+  become: true
+
+# 9. 設定ファイル変更時の再起動（Task 7で変更があった時だけ実行）
+- name: "Restart containers if config changed for {{ docker_apps_item.name }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ docker_apps_path }}"
+    state: restarted
+  when:
+    - docker_apps_item.start_service | default(true)
+    - docker_apps_deploy_result.changed
+  become: true

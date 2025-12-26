@@ -1,0 +1,16 @@
+---
+- name: Restart NetworkManager
+  ansible.builtin.service:
+    name: NetworkManager
+    state: restarted
+  become: true
+
+- name: Restart systemd-daemon
+  ansible.builtin.systemd:
+    daemon_reexec: true
+  become: true
+
+- name: Reboot host
+  ansible.builtin.reboot:
+    msg: "Rebooting to apply hardware and cgroup settings"
+  become: true

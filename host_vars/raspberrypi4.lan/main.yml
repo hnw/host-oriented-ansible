@@ -1,0 +1,24 @@
+---
+apply_roles:
+  - raspberrypi_setup
+  - system_bootstrap
+  - rsyslog
+  - prometheus.prometheus.node_exporter
+  - name: geerlingguy.docker
+    become: true
+  - docker_apps
+
+docker_daemon_options:
+  log-driver: "journald"
+  log-opts:
+    tag: "{{ '{{' }}.Name{{ '}}' }}"
+
+docker_apps:
+  - dockge
+  - alloy
+
+# 秘密情報：説明用にここに書いていますが、実運用ではAnsible Vaultを使ってください
+prometheus_username: XXXXXXX
+prometheus_password: glc_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX==
+loki_username: XXXXXXX
+loki_password: glc_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=XX=

@@ -1,0 +1,21 @@
+---
+- name: Get Docker socket info
+  ansible.builtin.stat:
+    path: /var/run/docker.sock
+  register: docker_apps_sock_stat
+  tags: [always]
+
+- name: Set docker_apps_host_gid fact
+  ansible.builtin.set_fact:
+    docker_apps_host_gid: "{{ docker_apps_sock_stat.stat.gid | default('0') }}"
+  tags: [always]
+
+- name: Manage Docker applications
+  ansible.builtin.include_tasks:
+    file: _app_loop.yml
+    apply:
+      tags: "{{ app_item.tags | default(['always']) }}"
+  loop: "{{ docker_apps }}"
+  loop_control:
+    loop_var: app_item
+  tags: [always]
